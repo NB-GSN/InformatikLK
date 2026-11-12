@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Die Warteschlange (Queue)</title>
+<style>
+:root{
+  --bg:#f6f4ef; --surface:#ffffff; --surface2:#f0ede6; --ink:#1f2328; --muted:#5d636b;
+  --line:#dcd7cc; --accent:#1f6f78; --accent-ink:#ffffff; --accent-soft:#dff0ef;
+  --ok:#1d7a3e; --ok-soft:#e1f3e7; --bad:#b4362c; --bad-soft:#fbe5e2; --warn:#8a5a00; --warn-soft:#fdf1d6;
+  --stack:#7a4fa8; --stack-soft:#efe6f8; --code-bg:#fbfaf7; --shadow:0 1px 3px rgba(0,0,0,.08),0 4px 14px rgba(0,0,0,.05);
+  --mono:ui-monospace,"Cascadia Code","Consolas","Menlo",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16191d; --surface:#1f2328; --surface2:#262b31; --ink:#e8e6e1; --muted:#a3a9b1;
+    --line:#383e46; --accent:#4fb3bd; --accent-ink:#0d1214; --accent-soft:#1d3436;
+    --ok:#5cc983; --ok-soft:#1b3326; --bad:#f08a80; --bad-soft:#3a2120; --warn:#e6b450; --warn-soft:#3a2f17;
+    --stack:#b892e0; --stack-soft:#2e2540; --code-bg:#1a1d21; --shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+    --bg:#16191d; --surface:#1f2328; --surface2:#262b31; --ink:#e8e6e1; --muted:#a3a9b1;
+    --line:#383e46; --accent:#4fb3bd; --accent-ink:#0d1214; --accent-soft:#1d3436;
+    --ok:#5cc983; --ok-soft:#1b3326; --bad:#f08a80; --bad-soft:#3a2120; --warn:#e6b450; --warn-soft:#3a2f17;
+    --stack:#b892e0; --stack-soft:#2e2540; --code-bg:#1a1d21; --shadow:0 1px 3px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.55}
+a{color:var(--accent)}
+code,.mono{font-family:var(--mono);font-size:.92em}
+p code, li code, td code, label code, .fb code{background:var(--surface2);padding:.05em .3em;border-radius:4px}
+h1,h2,h3{line-height:1.25;margin:0 0 .5em}
+h2{font-size:1.55rem}
+h3{font-size:1.15rem;margin-top:1.4em}
+button{font:inherit;cursor:pointer}
+input,textarea,select{font:inherit;color:var(--ink)}
+
+/* Kopfzeile */
+header.top{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line);box-shadow:var(--shadow)}
+.top-inner{max-width:1060px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;font-size:1.05rem;display:flex;align-items:center;gap:8px;margin-right:auto}
+.brand .logo{display:inline-flex;gap:2px}
+.brand .logo i{display:block;width:9px;height:18px;border-radius:3px;background:var(--accent)}
+.brand .logo i:nth-child(2){opacity:.7}.brand .logo i:nth-child(3){opacity:.45}
+.top-meta{display:flex;gap:10px;align-items:center;font-size:.88rem;color:var(--muted)}
+.pbar{width:120px;height:8px;border-radius:99px;background:var(--surface2);overflow:hidden}
+.pbar>div{height:100%;background:var(--accent);width:0;transition:width .4s}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:.45em .9em;border-radius:8px;min-height:40px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.small{padding:.25em .6em;min-height:32px;font-size:.88rem}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+nav.chapters{max-width:1060px;margin:0 auto;padding:0 16px 8px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin}
+nav.chapters button{flex:0 0 auto;border:1px solid var(--line);background:var(--surface2);color:var(--ink);border-radius:99px;padding:.3em .85em;font-size:.88rem;white-space:nowrap;min-height:36px}
+nav.chapters button.active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+nav.chapters button .chk{display:inline-block;margin-left:4px;font-weight:700}
+
+main{max-width:1060px;margin:0 auto;padding:22px 16px 80px}
+section.chapter{display:none}
+section.chapter.active{display:block}
+.chap-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.time{font-size:.85rem;background:var(--accent-soft);color:var(--ink);border-radius:99px;padding:.2em .7em;white-space:nowrap}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:16px 0;box-shadow:var(--shadow)}
+.card.task{border-left:5px solid var(--accent)}
+.card.star{border-left:5px solid var(--warn)}
+.card h3:first-child,.card h4:first-child{margin-top:0}
+.tag{display:inline-block;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--accent);margin-bottom:4px}
+.card.star .tag{color:var(--warn)}
+.done-badge{display:none;font-size:.8rem;font-weight:700;color:var(--ok);margin-left:6px}
+.is-done .done-badge{display:inline}
+.muted{color:var(--muted)}
+.note{background:var(--surface2);border-radius:10px;padding:12px 14px;margin:12px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}}
+.next-row{display:flex;justify-content:space-between;gap:10px;margin-top:26px;flex-wrap:wrap}
+
+/* Feedback */
+.fb{margin-top:10px;padding:10px 12px;border-radius:8px;display:none;font-size:.95rem}
+.fb.show{display:block}
+.fb.ok{background:var(--ok-soft);color:var(--ok)}
+.fb.bad{background:var(--bad-soft);color:var(--bad)}
+.fb.hint{background:var(--warn-soft);color:var(--warn)}
+.fb b{color:inherit}
+
+/* MC */
+.mc{display:grid;gap:8px;margin-top:10px}
+.mc button{text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:.6em .9em;min-height:44px}
+.mc button:hover:not(:disabled){border-color:var(--accent)}
+.mc button.right{background:var(--ok-soft);border-color:var(--ok);color:var(--ok);font-weight:600}
+.mc button.wrong{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.mc button:disabled{cursor:default}
+
+/* Patienten und Schlange */
+.qwrap{background:var(--surface2);border-radius:12px;padding:14px;overflow-x:auto}
+.qrow{display:flex;align-items:flex-end;gap:10px;min-height:118px}
+.qend{flex:0 0 auto;font-size:.78rem;color:var(--muted);text-align:center;align-self:center;line-height:1.2}
+.qend b{display:block;font-size:1.5rem;color:var(--accent);line-height:1}
+.qcells{display:flex;gap:8px;flex:1 1 auto;align-items:flex-end;min-width:0}
+.qempty{color:var(--muted);font-style:italic;align-self:center;padding:0 10px}
+.pat{flex:0 0 auto;width:74px;text-align:center;position:relative}
+.pat.new{animation:pop .3s ease-out}
+.pat .av{width:52px;height:52px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.3rem;color:#fff}
+.pat .nm{font-size:.82rem;margin-top:3px;font-weight:600;word-break:break-word}
+.pat .sub{font-size:.72rem;color:var(--muted)}
+.pat .ptr{position:absolute;top:-22px;left:0;right:0;font-size:.72rem;font-weight:700;color:var(--accent);font-family:var(--mono)}
+.pat.first .av{box-shadow:0 0 0 3px var(--surface2),0 0 0 6px var(--accent)}
+.pat.notfall .av{outline:3px dashed var(--bad);outline-offset:2px}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+.stackcol{display:flex;flex-direction:column-reverse;gap:6px;align-items:center;min-height:140px;justify-content:flex-start}
+.stackcol .pat{width:auto;display:flex;align-items:center;gap:8px}
+.stackcol .pat .av{width:36px;height:36px;font-size:1rem;margin:0}
+
+/* Wartezimmer-Simulation */
+.sim{display:grid;grid-template-columns:1fr 260px;gap:14px}
+@media (max-width:760px){.sim{grid-template-columns:1fr}}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:var(--surface);color:var(--ink);padding:.45em .9em;min-height:40px}
+.seg button.on{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.seg button.on.stk{background:var(--stack)}
+.clock{font-family:var(--mono);font-size:1.4rem;font-weight:700}
+.log{font-family:var(--mono);font-size:.84rem;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;max-height:220px;overflow:auto;white-space:pre-wrap}
+.log .ok{color:var(--ok)} .log .bad{color:var(--bad)} .log .info{color:var(--muted)}
+
+/* Spielplatz */
+.ctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.ctrl input[type=text]{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:.4em .6em;min-height:40px;width:150px}
+#k2 .ctrl .btn{font-family:var(--mono);font-size:.9rem}
+.ret{font-family:var(--mono);background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-height:40px;display:flex;align-items:center}
+.todo{list-style:none;padding:0;margin:8px 0 0}
+.todo li{padding:6px 0 6px 30px;position:relative;border-bottom:1px dashed var(--line)}
+.todo li:last-child{border-bottom:0}
+.todo li::before{content:"";position:absolute;left:4px;top:10px;width:16px;height:16px;border:2px solid var(--line);border-radius:4px}
+.todo li.ok::before{content:"✓";border-color:var(--ok);background:var(--ok);color:#fff;font-size:12px;line-height:14px;text-align:center;font-weight:700}
+.todo li.ok{color:var(--muted)}
+
+/* Zeigerbild */
+.nodes{display:flex;align-items:center;gap:0;padding:30px 4px 6px;min-height:90px}
+.node{display:flex;border:2px solid var(--ink);border-radius:6px;position:relative;flex:0 0 auto;background:var(--surface)}
+.node .c{padding:6px 10px;font-size:.85rem;font-weight:600;border-right:2px solid var(--ink)}
+.node .n{width:26px;display:flex;align-items:center;justify-content:center}
+.node .n::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--ink)}
+.arrow{width:28px;height:2px;background:var(--ink);position:relative;flex:0 0 auto}
+.arrow::after{content:"";position:absolute;right:-1px;top:-5px;border:6px solid transparent;border-left:8px solid var(--ink);border-right:0}
+.nullbox{font-family:var(--mono);font-size:.85rem;padding-left:6px;flex:0 0 auto}
+.node .lbl{position:absolute;top:-26px;font-family:var(--mono);font-size:.78rem;font-weight:700;color:var(--accent);white-space:nowrap}
+.node .lbl.h{left:0}.node .lbl.t{right:0}
+
+/* Tabellen */
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:var(--surface2)}
+.tblwrap{overflow-x:auto}
+
+/* Vorhersage */
+.pred pre{margin:8px 0}
+.pred .ans{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pred .ans input{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:.45em .6em;min-height:42px;flex:1 1 220px;font-family:var(--mono)}
+pre.code{font-family:var(--mono);font-size:.88rem;background:var(--code-bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow-x:auto;line-height:1.6;margin:10px 0;tab-size:4}
+pre.code .cm{color:var(--muted)}
+pre.code .kw{color:var(--accent);font-weight:600}
+
+/* Luecken */
+input.gap{font-family:var(--mono);font-size:.88rem;border:none;border-bottom:2px solid var(--accent);background:var(--accent-soft);color:var(--ink);padding:1px 4px;border-radius:4px 4px 0 0;min-width:4ch}
+input.gap:focus{outline:2px solid var(--accent);outline-offset:1px}
+input.gap.ok{border-bottom-color:var(--ok);background:var(--ok-soft)}
+input.gap.bad{border-bottom-color:var(--bad);background:var(--bad-soft)}
+.gapnum{font-size:.68rem;vertical-align:super;color:var(--accent);font-weight:700;margin-right:1px;font-family:var(--sans)}
+details.tip{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0;background:var(--surface)}
+details.tip summary{cursor:pointer;font-weight:600;color:var(--warn)}
+.blockbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.fblist{margin:6px 0 0;padding-left:20px}
+.out{font-family:var(--mono);font-size:.86rem;background:#111;color:#d6f5d6;border-radius:8px;padding:10px 12px;white-space:pre-wrap;min-height:60px;display:none}
+.out.show{display:block}
+
+/* Doku-Schublade */
+.drawer{position:fixed;inset:0;z-index:50;display:none}
+.drawer.open{display:block}
+.drawer .shade{position:absolute;inset:0;background:rgba(0,0,0,.35)}
+.drawer .panel{position:absolute;right:0;top:0;bottom:0;width:min(560px,100%);background:var(--surface);overflow:auto;padding:18px 18px 40px;box-shadow:-4px 0 20px rgba(0,0,0,.2)}
+.doc-m{border-top:1px solid var(--line);padding:8px 0}
+.doc-m .sig{font-family:var(--mono);font-weight:700;font-size:.92rem}
+.doc-m .kind{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+
+/* Ergebnis */
+.result{border:2px solid var(--accent);border-radius:14px;padding:18px;background:var(--surface)}
+.result .rhead{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:10px}
+.result .big{font-size:2rem;font-weight:800;color:var(--accent)}
+.result table td:nth-child(2),.result table th:nth-child(2){text-align:right;white-space:nowrap}
+textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--surface)}
+.namebox{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.namebox input{border:1px solid var(--line);border-radius:8px;padding:.45em .7em;min-height:44px;flex:1 1 240px;background:var(--surface)}
+.plan{list-style:none;padding:0;margin:0}
+.plan li{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--line);padding:7px 0}
+select{border:1px solid var(--line);border-radius:8px;padding:.35em .5em;min-height:40px;background:var(--surface)}
+@media (max-width:520px){
+  body{font-size:16px}
+  .card{padding:14px 14px}
+  .pbar{width:70px}
+  .brand span.full{display:none}
+  h2{font-size:1.3rem}
+}
+@media print{
+  header.top,nav.chapters,.next-row,.noprint{display:none!important}
+  section.chapter{display:none!important}
+  section#k5{display:block!important}
+  body{background:#fff}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span><span>Queue<span class="full"> – Die Warteschlange</span></span></div>
+    <div class="top-meta">
+      <span id="elapsed" title="Arbeitszeit seit dem Start">0 Min.</span>
+      <div class="pbar" title="Fortschritt"><div id="pbar"></div></div>
+      <span id="ptext">0 %</span>
+    </div>
+    <button class="btn small" id="docBtn">📄 Doku</button>
+  </div>
+  <nav class="chapters" id="nav"></nav>
+</header>
+
+<main>
+
+<!-- ============ START ============ -->
+<section class="chapter" id="k0" data-title="Start">
+  <div class="chap-head"><h2>Willkommen zur Selbstlernstunde „Queue“</h2></div>
+  <p>Ihr habt den <b>Stack</b> (Stapel) kennengelernt: Wer zuletzt kommt, ist zuerst dran. Heute geht es um sein Gegenstück, die <b>Queue</b> (Warteschlange). Ihr arbeitet ca. 60 Minuten selbstständig mit diesem Tutorial. Alle Aufgaben prüft die Seite sofort, und am Ende entsteht eine <b>Ergebniskarte</b>, die ihr als Screenshot in itslearning abgebt.</p>
+  <div class="card">
+    <h3>Dein Name</h3>
+    <div class="namebox"><input id="nameInput" type="text" placeholder="Vorname Nachname" autocomplete="off"><button class="btn primary" id="startBtn">Los geht's</button></div>
+    <p class="muted" style="margin:.6em 0 0;font-size:.9rem">Dein Fortschritt wird in diesem Browser gespeichert. Wenn du die Seite versehentlich schließt, öffne dieselbe Datei im selben Browser wieder.</p>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h3>Ablauf (ca. 60 Min.)</h3>
+      <ul class="plan">
+        <li><span>1 · Das Wartezimmer</span><span class="muted">8 Min.</span></li>
+        <li><span>2 · Queue-Spielplatz</span><span class="muted">10 Min.</span></li>
+        <li><span>3 · Vorhersagen</span><span class="muted">10 Min.</span></li>
+        <li><span>4 · Java: Klasse Wartezimmer</span><span class="muted">22 Min.</span></li>
+        <li><span>5 · Abschlussquiz + Ergebnis</span><span class="muted">10 Min.</span></li>
+        <li><span>★ Notfallpatienten (für Schnelle)</span><span class="muted">+10 Min.</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Spielregeln</h3>
+      <ul style="padding-left:20px;margin:0">
+        <li>Arbeitet allein oder zu zweit, aber jede/r füllt das eigene Tutorial aus.</li>
+        <li>Erst selbst nachdenken, dann Tipps aufklappen.</li>
+        <li>Die Dokumentation der Klasse <code>Queue</code> öffnet ihr jederzeit oben rechts über <b>📄 Doku</b>.</li>
+        <li>Wer früher fertig ist, macht die ★-Aufgabe in Kapitel 4.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ KAPITEL 1 ============ -->
+<section class="chapter" id="k1" data-title="1 Wartezimmer">
+  <div class="chap-head"><h2>1 · Wer zuerst kommt …</h2><span class="time">ca. 8 Min.</span></div>
+  <p>Montagmorgen in der Praxis von Dr. Pohl. Die Patientinnen und Patienten kommen nacheinander an und setzen sich ins Wartezimmer. Die Praxis-Software soll verwalten, wer als Nächstes ins Sprechzimmer darf.</p>
+  <p>Ein Praktikant hat die Software mit einem <b>Stack</b> programmiert, schließlich kennt er den schon. Probiert aus, was dann passiert.</p>
+
+  <div class="card task" id="t_k1_sim">
+    <span class="tag">Aufgabe 1.1</span><span class="done-badge">✓ erledigt</span>
+    <h3>Simuliere den Vormittag</h3>
+    <p>Lass mehrere Personen ankommen und rufe zwischendurch „Nächste/r bitte!“. Probiere <b>beide</b> Varianten aus, jeweils mit mindestens 3 Aufrufen. Achte auf die Wartezeiten.</p>
+    <div class="ctrl">
+      <div class="seg" role="group" aria-label="Variante">
+        <button id="modeStack" class="on stk">Stack-Software</button><button id="modeQueue">Queue-Software</button>
+      </div>
+      <span class="clock" id="simClock">08:00</span>
+    </div>
+    <div class="sim">
+      <div>
+        <div class="qwrap"><div id="simView"></div></div>
+        <div class="ctrl">
+          <button class="btn" id="simArrive">🚪 Patient/in kommt an</button>
+          <button class="btn primary" id="simCall">📢 Nächste/r bitte!</button>
+          <button class="btn small" id="simReset">Neu starten</button>
+        </div>
+      </div>
+      <div>
+        <div class="muted" style="font-size:.85rem;margin-bottom:4px">Sprechzimmer-Protokoll</div>
+        <div class="log" id="simLog"></div>
+      </div>
+    </div>
+    <div class="fb" id="fb_k1_sim"></div>
+  </div>
+
+  <div class="card task" id="t_k1_mc">
+    <span class="tag">Aufgabe 1.2</span><span class="done-badge">✓ erledigt</span>
+    <h3>Was ist das Problem der Stack-Software?</h3>
+    <div class="mc" data-mc="k1_mc"></div>
+    <div class="fb" id="fb_k1_mc"></div>
+  </div>
+
+  <div class="card task" id="t_k1_fifo">
+    <span class="tag">Aufgabe 1.3</span><span class="done-badge">✓ erledigt</span>
+    <h3>Das Prinzip bekommt einen Namen</h3>
+    <p>Der Stack arbeitet nach dem Prinzip <b>LIFO</b> (<i>Last In, First Out</i>). Ein Wartezimmer braucht das umgekehrte Prinzip. Wie lautet die Abkürzung und wofür steht sie?</p>
+    <div class="pred"><div class="ans">
+      <input type="text" id="in_fifo1" placeholder="Abkürzung, z. B. ABCD" autocomplete="off" autocapitalize="off">
+      <input type="text" id="in_fifo2" placeholder="ausgeschrieben (englisch)" autocomplete="off" autocapitalize="off">
+      <button class="btn primary" id="chk_fifo">Prüfen</button>
+    </div></div>
+    <div class="fb" id="fb_k1_fifo"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Merke: Stack und Queue im Vergleich</h3>
+    <div class="tblwrap"><table>
+      <tr><th></th><th>Stack (Stapel)</th><th>Queue (Schlange)</th></tr>
+      <tr><td>Prinzip</td><td>LIFO: Last In, First Out</td><td><b>FIFO: First In, First Out</b></td></tr>
+      <tr><td>Hinzufügen</td><td><code>push(x)</code>: oben drauf</td><td><code>enqueue(x)</code>: hinten anstellen</td></tr>
+      <tr><td>Entfernen</td><td><code>pop()</code>: oberstes weg</td><td><code>dequeue()</code>: vorderstes weg</td></tr>
+      <tr><td>Nachsehen</td><td><code>top()</code>: oberstes Element</td><td><code>front()</code>: vorderstes Element</td></tr>
+      <tr><td>Leer?</td><td><code>isEmpty()</code></td><td><code>isEmpty()</code></td></tr>
+      <tr><td>Alltag</td><td>Tellerstapel, Rückgängig-Funktion</td><td>Wartezimmer, Druckerwarteschlange, Supermarktkasse</td></tr>
+    </table></div>
+  </div>
+  <div class="next-row"><button class="btn" data-go="k0">← Zurück</button><button class="btn primary" data-go="k2">Weiter zu Kapitel 2 →</button></div>
+</section>
+
+<!-- ============ KAPITEL 2 ============ -->
+<section class="chapter" id="k2" data-title="2 Spielplatz">
+  <div class="chap-head"><h2>2 · Der Queue-Spielplatz</h2><span class="time">ca. 10 Min.</span></div>
+  <p>Hier steuert ihr eine echte <code>Queue&lt;String&gt;</code> mit den Methoden aus der Abitur-Dokumentation. Jeder Klick erzeugt den passenden Java-Aufruf im Protokoll. Erledigt die Aufträge in der Liste, sie haken sich automatisch ab.</p>
+
+  <div class="card">
+    <div class="qwrap"><div id="pgView"></div></div>
+    <label class="ctrl" style="margin:8px 0 0;font-size:.9rem"><input type="checkbox" id="ptrToggle"> Zeigerbild mit <code>head</code> und <code>tail</code> anzeigen (Ausblick)</label>
+    <div id="ptrView" class="qwrap" style="display:none;margin-top:8px"></div>
+    <div class="ctrl">
+      <input type="text" id="pgInput" placeholder="Name, z. B. Anna" autocomplete="off" autocapitalize="words">
+      <button class="btn" id="pgEnq">enqueue(…)</button>
+      <button class="btn" id="pgEnqNull">enqueue(null)</button>
+      <button class="btn" id="pgDeq">dequeue()</button>
+      <button class="btn" id="pgFront">front()</button>
+      <button class="btn" id="pgEmpty">isEmpty()</button>
+      <button class="btn small" id="pgReset" style="font-family:var(--sans)">Neue leere Queue</button>
+    </div>
+    <div class="ctrl"><span class="muted" style="font-size:.85rem">Rückgabewert:</span><div class="ret" id="pgRet">–</div></div>
+    <div class="log" id="pgLog"></div>
+  </div>
+
+  <div class="card task" id="t_k2_list">
+    <span class="tag">Aufgabe 2.1 · Aufträge</span>
+    <ul class="todo" id="pgTodo">
+      <li data-t="k2_a1">Baue die Schlange so, dass genau <b>Anna, Ben, Cem</b> darin stehen (Anna vorne).</li>
+      <li data-t="k2_a2">Finde mit einer <b>Anfrage</b> heraus, wer vorne steht, ohne die Schlange zu verändern.</li>
+      <li data-t="k2_a3">Leere die Schlange vollständig und rufe dann noch einmal <code>dequeue()</code> auf. Was passiert?</li>
+      <li data-t="k2_a4">Rufe <code>front()</code> bei leerer Schlange auf. Was wird zurückgegeben?</li>
+      <li data-t="k2_a5">Versuche, <code>null</code> anzuhängen, während mindestens eine Person in der Schlange steht. Ändert sich etwas?</li>
+    </ul>
+  </div>
+
+  <div class="card task" id="t_k2_types">
+    <span class="tag">Aufgabe 2.2</span><span class="done-badge">✓ erledigt</span>
+    <h3>Auftrag oder Anfrage?</h3>
+    <p>Ein <b>Auftrag</b> verändert das Objekt (Rückgabetyp <code>void</code>), eine <b>Anfrage</b> liefert einen Wert und lässt das Objekt unverändert. Ordne zu.</p>
+    <div class="tblwrap"><table id="typeTable">
+      <tr><th>Methode</th><th>Art</th></tr>
+      <tr><td><code>boolean isEmpty()</code></td><td><select data-a="Anfrage"><option value="">– wählen –</option><option>Auftrag</option><option>Anfrage</option></select></td></tr>
+      <tr><td><code>void enqueue(ContentType pContent)</code></td><td><select data-a="Auftrag"><option value="">– wählen –</option><option>Auftrag</option><option>Anfrage</option></select></td></tr>
+      <tr><td><code>void dequeue()</code></td><td><select data-a="Auftrag"><option value="">– wählen –</option><option>Auftrag</option><option>Anfrage</option></select></td></tr>
+      <tr><td><code>ContentType front()</code></td><td><select data-a="Anfrage"><option value="">– wählen –</option><option>Auftrag</option><option>Anfrage</option></select></td></tr>
+    </table></div>
+    <div class="blockbar"><button class="btn primary" id="chk_types">Prüfen</button></div>
+    <div class="fb" id="fb_k2_types"></div>
+  </div>
+  <div class="note"><b>Fachlich wichtig (Abi-Dokumentation):</b> <code>front()</code> liefert bei leerer Schlange <code>null</code>. <code>dequeue()</code> bei leerer Schlange und <code>enqueue(null)</code> lassen die Schlange unverändert, es gibt also keinen Fehler.</div>
+  <div class="next-row"><button class="btn" data-go="k1">← Zurück</button><button class="btn primary" data-go="k3">Weiter zu Kapitel 3 →</button></div>
+</section>
+
+<!-- ============ KAPITEL 3 ============ -->
+<section class="chapter" id="k3" data-title="3 Vorhersagen">
+  <div class="chap-head"><h2>3 · Vorhersagen: Was passiert?</h2><span class="time">ca. 10 Min.</span></div>
+  <p>Spielt die Befehle im Kopf oder auf Papier durch, <b>nicht</b> im Spielplatz. Gebt die Schlange von <b>vorne nach hinten</b> an, durch Kommas getrennt, z. B. <code>Anna, Ben</code>. Eine leere Schlange schreibt ihr als <code>leer</code>.</p>
+  <div id="predList"></div>
+  <div class="next-row"><button class="btn" data-go="k2">← Zurück</button><button class="btn primary" data-go="k4">Weiter zu Kapitel 4 →</button></div>
+</section>
+
+<!-- ============ KAPITEL 4 ============ -->
+<section class="chapter" id="k4" data-title="4 Java">
+  <div class="chap-head"><h2>4 · Java: Die Klasse <code>Wartezimmer</code></h2><span class="time">ca. 22 Min.</span></div>
+  <p>Jetzt wird programmiert. Die Klasse <code>Wartezimmer</code> <b>benutzt</b> eine <code>Queue&lt;Patient&gt;</code>. Wie die Queue intern funktioniert, schauen wir uns später gemeinsam an. Füllt die Lücken mit Java-Code und klickt auf <b>Prüfen</b>. Leerzeichen sind egal, Groß-/Kleinschreibung und Semikolons nicht!</p>
+  <div class="card">
+    <h3 style="margin-top:0">Gegeben: Klasse <code>Patient</code></h3>
+    <pre class="code" id="codePatient"></pre>
+  </div>
+  <div id="gapBlocks"></div>
+
+  <div class="card task" id="t_k4_run">
+    <span class="tag">Testlauf</span>
+    <h3>Testtreiber ausführen (simuliert)</h3>
+    <p>Sobald die Blöcke A und B stimmen, könnt ihr diese <code>main</code>-Methode „ausführen“. Überlegt vorher, was ausgegeben wird.</p>
+    <pre class="code" id="codeMain"></pre>
+    <div class="blockbar"><button class="btn primary" id="runBtn" disabled>▶ Ausführen</button><span class="muted" id="runHint" style="font-size:.88rem">erst Block A und B lösen</span></div>
+    <div class="out" id="runOut"></div>
+  </div>
+
+  <div class="card task" id="t_k4_r1">
+    <span class="tag">Aufgabe 4.4 · Nachdenken</span><span class="done-badge">✓ erledigt</span>
+    <h3>Ist die <code>if</code>-Abfrage in <code>naechsterBitte()</code> überhaupt nötig?</h3>
+    <div class="mc" data-mc="k4_r1"></div>
+    <div class="fb" id="fb_k4_r1"></div>
+  </div>
+  <div class="card task" id="t_k4_r2">
+    <span class="tag">Aufgabe 4.5 · Nachdenken</span><span class="done-badge">✓ erledigt</span>
+    <h3>Warum braucht <code>anzahlWartende()</code> die zweite <code>while</code>-Schleife?</h3>
+    <div class="mc" data-mc="k4_r2"></div>
+    <div class="fb" id="fb_k4_r2"></div>
+  </div>
+
+  <div id="starBlock"></div>
+  <div class="next-row"><button class="btn" data-go="k3">← Zurück</button><button class="btn primary" data-go="k5">Weiter zum Abschluss →</button></div>
+</section>
+
+<!-- ============ KAPITEL 5 ============ -->
+<section class="chapter" id="k5" data-title="5 Abschluss">
+  <div class="chap-head"><h2>5 · Abschlussquiz und Ergebnis</h2><span class="time">ca. 10 Min.</span></div>
+  <p class="noprint">Es zählt jeweils die <b>erste</b> Antwort. Nach dem Klick seht ihr die Erklärung.</p>
+  <div id="quizList" class="noprint"></div>
+  <div class="card task noprint" id="t_k5_ref">
+    <span class="tag">Reflexion</span><span class="done-badge">✓ erledigt</span>
+    <h3>In eigenen Worten</h3>
+    <p>Erkläre in 2–3 Sätzen den Unterschied zwischen Stack und Queue und nenne ein <b>eigenes</b> Alltagsbeispiel für eine Queue (nicht das Wartezimmer).</p>
+    <textarea id="refText" placeholder="Deine Antwort …"></textarea>
+    <div class="muted" style="font-size:.85rem" id="refCount">0 Zeichen (mind. 80)</div>
+  </div>
+
+  <h3>Deine Ergebniskarte</h3>
+  <p class="noprint">Mach einen <b>Screenshot</b> der Karte (iPad: Seitentaste + Lautstärke hoch; Windows: <code>Win + Umschalt + S</code>) und lade ihn in itslearning hoch. Alternativ: <button class="btn small" onclick="window.print()">Als PDF drucken</button></p>
+  <div class="result" id="resultCard"></div>
+  <div class="next-row"><button class="btn" data-go="k4">← Zurück</button><button class="btn small" id="resetAll">Alles zurücksetzen</button></div>
+</section>
+
+</main>
+
+<!-- Doku -->
+<div class="drawer" id="drawer" aria-hidden="true">
+  <div class="shade" id="drawerShade"></div>
+  <div class="panel" role="dialog" aria-label="Dokumentation">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">Dokumentation</h2><button class="btn small" id="docClose">Schließen ✕</button></div>
+    <h3>Die generische Klasse <code>Queue&lt;ContentType&gt;</code></h3>
+    <p style="font-size:.93rem">Objekte der generischen Klasse <code>Queue</code> (Warteschlange) verwalten beliebige Objekte vom Typ <code>ContentType</code> nach dem <b>First-In-First-Out</b>-Prinzip, d.&nbsp;h. das zuerst abgelegte Objekt wird als erstes wieder entnommen. Alle Methoden haben eine konstante Laufzeit, unabhängig von der Anzahl der verwalteten Objekte.</p>
+    <div class="doc-m"><div class="kind">Konstruktor</div><div class="sig">Queue&lt;ContentType&gt;()</div><div>Eine leere Schlange wird erzeugt. Objekte, die in dieser Schlange verwaltet werden, müssen vom Typ <code>ContentType</code> sein.</div></div>
+    <div class="doc-m"><div class="kind">Anfrage</div><div class="sig">boolean isEmpty()</div><div>Die Anfrage liefert den Wert <code>true</code>, wenn die Schlange keine Objekte enthält, sonst liefert sie den Wert <code>false</code>.</div></div>
+    <div class="doc-m"><div class="kind">Auftrag</div><div class="sig">void enqueue(ContentType pContent)</div><div>Das Objekt <code>pContent</code> wird an die Schlange angehängt. Falls <code>pContent</code> gleich <code>null</code> ist, bleibt die Schlange unverändert.</div></div>
+    <div class="doc-m"><div class="kind">Auftrag</div><div class="sig">void dequeue()</div><div>Das erste Objekt wird aus der Schlange entfernt. Falls die Schlange leer ist, wird sie nicht verändert.</div></div>
+    <div class="doc-m"><div class="kind">Anfrage</div><div class="sig">ContentType front()</div><div>Die Anfrage liefert das erste Objekt der Schlange. Die Schlange bleibt unverändert. Falls die Schlange leer ist, wird <code>null</code> zurückgegeben.</div></div>
+    <h3>Zum Vergleich: <code>Stack&lt;ContentType&gt;</code></h3>
+    <div class="doc-m"><div class="sig">boolean isEmpty() · void push(ContentType pContent) · void pop() · ContentType top()</div><div class="muted" style="font-size:.9rem">LIFO: <code>push</code> legt oben ab, <code>pop</code> entfernt das oberste Objekt, <code>top</code> liefert es.</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+/* ---------- Speicher ---------- */
+var KEY = "queueTutorial_SchlossNeuhaus_v1";
+var S = {name:"", start:null, done:{}, hints:{}, solved:{}, shown:{}, tries:{}, gapVals:{}, mcFirst:{}, ref:"", chapter:"k0", inputs:{}};
+try { var raw = localStorage.getItem(KEY); if (raw) { var o = JSON.parse(raw); for (var k in o) S[k] = o[k]; } } catch(e) {}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} }
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function fb(id, cls, html){ var el=$(id); if(!el) return; el.className="fb show "+cls; el.innerHTML=html; }
+
+/* ---------- Aufgabenliste ---------- */
+var TASKS = {
+  k1:["k1_sim","k1_mc","k1_fifo"],
+  k2:["k2_a1","k2_a2","k2_a3","k2_a4","k2_a5","k2_types"],
+  k3:["p1","p2","p3","p4","p5"],
+  k4:["blkA","blkB","blkC","k4_r1","k4_r2"],
+  k5:["q1","q2","q3","q4","q5","q6","q7","q8","k5_ref"],
+  star:["blkS"]
+};
+var CHAPNAMES = {k1:"1 · Wartezimmer",k2:"2 · Spielplatz",k3:"3 · Vorhersagen",k4:"4 · Java-Code",k5:"5 · Quiz + Reflexion",star:"★ Notfallpatienten"};
+function markDone(id){
+  if (S.done[id]) return;
+  S.done[id] = true; save();
+  var c = $("t_"+id); if (c) c.classList.add("is-done");
+  refreshProgress();
+}
+function refreshProgress(){
+  var tot=0, d=0;
+  ["k1","k2","k3","k4","k5"].forEach(function(c){ TASKS[c].forEach(function(t){ tot++; if(S.done[t]) d++; }); });
+  var p = Math.round(100*d/tot);
+  $("pbar").style.width = p+"%"; $("ptext").textContent = p+" %";
+  buildNav();
+  document.querySelectorAll("#pgTodo li").forEach(function(li){ li.classList.toggle("ok", !!S.done[li.dataset.t]); });
+  for (var t in S.done){ var c=$("t_"+t); if(c) c.classList.add("is-done"); }
+  renderResult();
+}
+
+/* ---------- Navigation ---------- */
+var SECS = ["k0","k1","k2","k3","k4","k5"];
+function chapterDone(c){ return TASKS[c] && TASKS[c].every(function(t){return S.done[t];}); }
+function buildNav(){
+  var n=$("nav"); n.innerHTML="";
+  SECS.forEach(function(id){
+    var b=document.createElement("button");
+    b.textContent = document.getElementById(id).dataset.title;
+    if (chapterDone(id)) { var s=document.createElement("span"); s.className="chk"; s.textContent="✓"; b.appendChild(s); }
+    if (S.chapter===id) b.className="active";
+    b.onclick=function(){ go(id); };
+    n.appendChild(b);
+  });
+}
+function go(id){
+  if (id!=="k0" && !S.name){ go("k0"); $("nameInput").focus(); $("nameInput").placeholder="Bitte zuerst den Namen eintragen"; return; }
+  S.chapter=id; save();
+  SECS.forEach(function(s){ $(s).classList.toggle("active", s===id); });
+  buildNav(); window.scrollTo(0,0);
+  if (id==="k5") renderResult();
+}
+document.querySelectorAll("[data-go]").forEach(function(b){ b.onclick=function(){ go(b.dataset.go); }; });
+
+$("nameInput").value = S.name || "";
+$("startBtn").onclick=function(){
+  var v=$("nameInput").value.trim();
+  if (v.length<2){ $("nameInput").focus(); return; }
+  S.name=v; if(!S.start) S.start=Date.now(); save(); go("k1");
+};
+$("nameInput").addEventListener("keydown",function(e){ if(e.key==="Enter") $("startBtn").click(); });
+function tick(){
+  if (!S.start){ $("elapsed").textContent="0 Min."; return; }
+  var m=Math.floor((Date.now()-S.start)/60000); $("elapsed").textContent=m+" Min.";
+}
+setInterval(tick, 20000);
+
+/* ---------- Doku ---------- */
+function openDoc(o){ $("drawer").classList.toggle("open",o); $("drawer").setAttribute("aria-hidden", o?"false":"true"); }
+$("docBtn").onclick=function(){openDoc(true);}; $("docClose").onclick=function(){openDoc(false);}; $("drawerShade").onclick=function(){openDoc(false);};
+document.addEventListener("keydown",function(e){ if(e.key==="Escape") openDoc(false); });
+
+/* ---------- Patienten-Darstellung ---------- */
+var COLORS=["#1f6f78","#b4562c","#5a6abf","#2f8a4c","#a04577","#8a6d1d","#3f7fa8","#7a4fa8","#c0392b","#507050"];
+function colorOf(name){ var h=0; for(var i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))>>>0; return COLORS[h%COLORS.length]; }
+function patHTML(p, extraCls, sub, ptr){
+  var name = typeof p==="string"?p:p.name;
+  return '<div class="pat '+(extraCls||"")+'">'+(ptr?'<div class="ptr">'+ptr+'</div>':'')+'<div class="av" style="background:'+colorOf(name)+'">'+esc(name.charAt(0).toUpperCase())+'</div><div class="nm">'+esc(name)+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';
+}
+function queueHTML(arr, opts){
+  opts=opts||{};
+  var cells = arr.length? arr.map(function(p,i){
+    var ptr = opts.pointers ? (arr.length===1?"head·tail":(i===0?"head":(i===arr.length-1?"tail":""))) : "";
+    return patHTML(p, (i===0?"first ":"")+(opts.animLast&&i===arr.length-1?"new":""), opts.sub?opts.sub(p,i):"", ptr);
+  }).join("") : '<div class="qempty">(leer)</div>';
+  return '<div class="qrow"><div class="qend"><b>⟵</b>vorne<br>(Ausgang)</div><div class="qcells">'+cells+'</div><div class="qend"><b>⟵</b>hinten<br>(Eingang)</div></div>';
+}
+function stackHTML(arr, sub){
+  var cells = arr.length ? arr.map(function(p,i){ return patHTML(p, i===arr.length-1?"first":"", sub?sub(p,i):""); }).join("") : '<div class="qempty">(leer)</div>';
+  return '<div style="display:flex;gap:14px;align-items:flex-end"><div class="stackcol">'+cells+'</div><div class="qend" style="align-self:flex-start"><b style="color:var(--stack)">⇅</b>oben: rein<br>und raus</div></div>';
+}
+
+/* ---------- Kapitel 1: Simulation ---------- */
+var NAMES=["Anna","Ben","Cem","Dora","Emil","Fatma","Gustav","Hira","Ivo","Jana","Kai","Lena","Mia","Noah","Ole","Pia","Quentin","Rana","Sven","Tuana"];
+var sim={mode:"stack", t:0, list:[], next:0, calls:{stack:0,queue:0}, log:[]};
+function fmt(t){ var h=8+Math.floor(t/60), m=t%60; return (h<10?"0":"")+h+":"+(m<10?"0":"")+m; }
+function simRender(){
+  $("modeStack").className = sim.mode==="stack"?"on stk":"";
+  $("modeQueue").className = sim.mode==="queue"?"on":"";
+  $("simClock").textContent = fmt(sim.t);
+  var sub=function(p){ return "seit "+(sim.t-p.at)+" Min."; };
+  $("simView").innerHTML = sim.mode==="stack" ? stackHTML(sim.list, sub) : queueHTML(sim.list, {sub:sub});
+  $("simLog").innerHTML = sim.log.length? sim.log.join("\n") : '<span class="info">Noch niemand behandelt.</span>';
+  $("simLog").scrollTop = 1e6;
+}
+function simReset(keepCalls){
+  sim.t=0; sim.list=[]; sim.next=0; sim.log=[];
+  for (var i=0;i<3;i++){ sim.list.push({name:NAMES[sim.next++], at:sim.t}); sim.t+=5; }
+  sim.t=10; simRender();
+}
+$("modeStack").onclick=function(){ sim.mode="stack"; simReset(); };
+$("modeQueue").onclick=function(){ sim.mode="queue"; simReset(); };
+$("simReset").onclick=function(){ simReset(); };
+$("simArrive").onclick=function(){
+  sim.t+=5; sim.list.push({name:NAMES[sim.next%NAMES.length], at:sim.t}); sim.next++; simRender();
+};
+$("simCall").onclick=function(){
+  sim.t+=5;
+  if (!sim.list.length){ sim.log.push('<span class="info">'+fmt(sim.t)+'  Niemand wartet.</span>'); simRender(); return; }
+  var p = sim.mode==="stack" ? sim.list.pop() : sim.list.shift();
+  var w = sim.t-p.at;
+  var cls = w>=30?"bad":"ok";
+  sim.log.push('<span class="'+cls+'">'+fmt(sim.t)+'  '+esc(p.name)+' (wartete '+w+' Min.)</span>');
+  sim.calls[sim.mode]++;
+  if (sim.mode==="stack" && sim.list.length){
+    var oldest = sim.list[0]; if (sim.t-oldest.at>=20) sim.log.push('<span class="bad">        … '+esc(oldest.name)+' wartet schon '+(sim.t-oldest.at)+' Min.!</span>');
+  }
+  simRender();
+  if (sim.calls.stack>=3 && sim.calls.queue>=3 && !S.done.k1_sim){
+    markDone("k1_sim");
+    fb("fb_k1_sim","ok","<b>Gut beobachtet?</b> Beim Stack wird immer die Person aufgerufen, die <i>zuletzt</i> kam. Wer früh da war, rutscht nach unten und wartet ewig. Mit der Queue kommt man in der Reihenfolge der Ankunft dran.");
+  } else if (!S.done.k1_sim){
+    fb("fb_k1_sim","hint","Aufrufe bisher: Stack "+sim.calls.stack+"/3, Queue "+sim.calls.queue+"/3.");
+  }
+};
+simReset();
+if (S.done.k1_sim) fb("fb_k1_sim","ok","Erledigt. Beim Stack kommt immer die zuletzt angekommene Person dran, bei der Queue die, die am längsten wartet.");
+
+/* ---------- MC-Fragen ---------- */
+var MC = {
+  k1_mc:{ q:null, opts:[
+    ["Der Stack ist zu langsam, weil er zu viele Patienten speichern muss.", false, "Nein, alle Stack-Methoden laufen in konstanter Zeit. Das Problem ist die Reihenfolge."],
+    ["Wer zuletzt kommt, wird zuerst aufgerufen. Früh angekommene Patienten warten dadurch unfair lange, im schlimmsten Fall endlos.", true, "Genau! Der Stack arbeitet nach LIFO. Im Wartezimmer brauchen wir das Gegenteil: Wer zuerst kommt, wird zuerst behandelt."],
+    ["Der Stack kann nur Zahlen speichern, keine Patienten.", false, "Nein, der Stack ist generisch (Stack&lt;ContentType&gt;) und kann beliebige Objekte verwalten."],
+    ["Es gibt kein Problem, die Reihenfolge ist egal.", false, "Frag mal Anna, die seit 8 Uhr wartet …"]
+  ]},
+  k4_r1:{ opts:[
+    ["Ja, sonst stürzt das Programm bei leerer Schlange ab.", false, "Schau in die Doku: Bei der Abi-Queue gibt es keinen Absturz."],
+    ["Nein. Bei leerer Schlange liefert front() schon null und dequeue() ändert nichts, das Ergebnis wäre also auch ohne if null.", true, "Richtig. Die if-Abfrage macht den Code aber lesbarer, deshalb darf sie stehen bleiben. Achtung: Bei java.util-Klassen oder einer eigenen Implementierung kann das anders sein!"],
+    ["Ja, weil dequeue() bei leerer Schlange eine Exception wirft.", false, "Laut Dokumentation bleibt eine leere Schlange bei dequeue() einfach unverändert."]
+  ]},
+  k4_r2:{ opts:[
+    ["Weil die Schlange nach der ersten Schleife leer ist. Die zweite Schleife stellt alle Patienten in derselben Reihenfolge wieder zurück.", true, "Genau. Eine Queue hat keine Methode size(), man kommt nur vorne an die Objekte heran. Zum Zählen muss man sie abbauen und anschließend wiederherstellen."],
+    ["Damit doppelt gezählt wird, das Ergebnis wird danach halbiert.", false, "Nein, gezählt wird nur in der ersten Schleife."],
+    ["Die zweite Schleife ist überflüssig und kann gelöscht werden.", false, "Probiere es gedanklich: Nach dem Zählen säße niemand mehr im Wartezimmer!"]
+  ]}
+};
+function buildMC(id, host, fbId, onFirst){
+  var def = MC[id]; host.innerHTML="";
+  var order = def.opts.map(function(_,i){return i;});
+  def.opts.forEach(function(o,i){
+    var b=document.createElement("button"); b.innerHTML=o[0];
+    b.onclick=function(){
+      if (S.mcFirst[id]===undefined){ S.mcFirst[id]= o[1]; save(); if(onFirst) onFirst(o[1]); }
+      if (o[1]){
+        b.classList.add("right"); host.querySelectorAll("button").forEach(function(x){x.disabled=true;});
+        fb(fbId,"ok",o[2]); markDone(id);
+      } else { b.classList.add("wrong"); b.disabled=true; fb(fbId,"bad",o[2]); }
+    };
+    host.appendChild(b);
+  });
+  if (S.done[id]){
+    def.opts.forEach(function(o,i){ var b=host.children[i]; b.disabled=true; if(o[1]){ b.classList.add("right"); fb(fbId,"ok",o[2]); } });
+  }
+}
+buildMC("k1_mc", document.querySelector('[data-mc="k1_mc"]'), "fb_k1_mc");
+buildMC("k4_r1", document.querySelector('[data-mc="k4_r1"]'), "fb_k4_r1");
+buildMC("k4_r2", document.querySelector('[data-mc="k4_r2"]'), "fb_k4_r2");
+
+/* FIFO */
+function simple(s){ return s.toLowerCase().replace(/[^a-z]/g,""); }
+$("chk_fifo").onclick=function(){
+  var a=simple($("in_fifo1").value), b=simple($("in_fifo2").value);
+  S.inputs.fifo1=$("in_fifo1").value; S.inputs.fifo2=$("in_fifo2").value; save();
+  if (a==="fifo" && b==="firstinfirstout"){ fb("fb_k1_fifo","ok","Richtig: <b>FIFO – First In, First Out</b>. Wer zuerst kommt, wird zuerst bedient."); markDone("k1_fifo"); }
+  else if (a==="fifo"){ fb("fb_k1_fifo","hint","Die Abkürzung stimmt. Schreibe sie noch aus, nach dem Muster von <i>Last In, First Out</i>."); }
+  else if (a==="lifo"){ fb("fb_k1_fifo","bad","LIFO ist das Stack-Prinzip. Gesucht ist das Gegenteil."); }
+  else fb("fb_k1_fifo","bad","Noch nicht. Tipp: Das erste Wort von LIFO muss sich ändern.");
+};
+if (S.inputs.fifo1) $("in_fifo1").value=S.inputs.fifo1;
+if (S.inputs.fifo2) $("in_fifo2").value=S.inputs.fifo2;
+if (S.done.k1_fifo) fb("fb_k1_fifo","ok","Richtig: <b>FIFO – First In, First Out</b>.");
+
+/* ---------- Kapitel 2: Spielplatz ---------- */
+var pg={q:[], log:[], ptr:false};
+function pgRender(anim){
+  $("pgView").innerHTML = queueHTML(pg.q, {animLast:anim});
+  $("pgLog").innerHTML = pg.log.length ? pg.log.join("\n") : '<span class="info">Queue&lt;String&gt; q = new Queue&lt;String&gt;();</span>';
+  $("pgLog").scrollTop=1e6;
+  if (pg.ptr){
+    var h;
+    if (!pg.q.length) h='<div class="nodes"><span class="mono" style="font-size:.88rem"><b style="color:var(--accent)">head</b> = null, <b style="color:var(--accent)">tail</b> = null</span></div>';
+    else {
+      h='<div class="nodes">';
+      pg.q.forEach(function(p,i){
+        var lb=""; if(i===0) lb+='<span class="lbl h">head ↓</span>'; if(i===pg.q.length-1) lb+='<span class="lbl t">↓ tail</span>';
+        if(pg.q.length===1) lb='<span class="lbl h">head, tail ↓</span>';
+        h+='<div class="node">'+lb+'<div class="c">'+esc(p)+'</div><div class="n"></div></div><div class="arrow"></div>';
+      });
+      h+='<span class="nullbox">null</span></div><div class="muted" style="font-size:.82rem">Intern: Jeder Knoten (<code>QueueNode</code>) kennt seinen Inhalt und den nächsten Knoten. <code>head</code> zeigt auf den ersten, <code>tail</code> auf den letzten Knoten. Das bauen wir später gemeinsam.</div>';
+    }
+    $("ptrView").innerHTML=h;
+  }
+}
+function pgCheck(){
+  if (pg.q.join(",")==="Anna,Ben,Cem") markDone("k2_a1");
+}
+function L(s, cls){ pg.log.push(cls?'<span class="'+cls+'">'+s+'</span>':s); }
+$("ptrToggle").onchange=function(){ pg.ptr=this.checked; $("ptrView").style.display=pg.ptr?"block":"none"; pgRender(); };
+$("pgEnq").onclick=function(){
+  var v=$("pgInput").value.trim();
+  if(!v){ $("pgInput").focus(); $("pgRet").textContent="Bitte erst einen Namen eintippen."; return; }
+  if(/^null$/i.test(v)){ $("pgInput").value=""; $("pgEnqNull").click(); return; }
+  pg.q.push(v); L('q.enqueue("'+esc(v)+'");'); $("pgRet").textContent="– (void)"; $("pgInput").value=""; $("pgInput").focus(); pgRender(true); pgCheck();
+};
+$("pgInput").addEventListener("keydown",function(e){ if(e.key==="Enter") $("pgEnq").click(); });
+$("pgEnqNull").onclick=function(){
+  L('q.enqueue(null);  <span class="info">// Schlange bleibt unveraendert</span>'); $("pgRet").textContent="– (void)  Die Schlange bleibt unverändert.";
+  if (pg.q.length) markDone("k2_a5");
+  else if (!S.done.k2_a5) $("pgRet").textContent="– (void)  Die Schlange bleibt unverändert. Für Auftrag 5 muss mindestens eine Person in der Schlange stehen.";
+  pgRender();
+};
+$("pgDeq").onclick=function(){
+  if (!pg.q.length){ L('q.dequeue();  <span class="info">// leer: keine Veraenderung</span>'); $("pgRet").textContent="– (void)  Leere Schlange: nichts passiert, kein Fehler."; markDone("k2_a3"); }
+  else { var x=pg.q.shift(); L('q.dequeue();  <span class="info">// '+esc(x)+' entfernt</span>'); $("pgRet").textContent="– (void)"; }
+  pgRender(); pgCheck();
+};
+$("pgFront").onclick=function(){
+  if (!pg.q.length){ L('q.front();  <span class="info">// liefert null</span>'); $("pgRet").textContent="null"; markDone("k2_a4"); }
+  else { L('q.front();  <span class="info">// liefert "'+esc(pg.q[0])+'"</span>'); $("pgRet").textContent='"'+pg.q[0]+'"'; markDone("k2_a2"); }
+  pgRender();
+};
+$("pgEmpty").onclick=function(){ var r=pg.q.length===0; L('q.isEmpty();  <span class="info">// liefert '+r+'</span>'); $("pgRet").textContent=String(r); pgRender(); };
+$("pgReset").onclick=function(){ pg.q=[]; pg.log=['<span class="info">q = new Queue&lt;String&gt;();</span>']; $("pgRet").textContent="–"; pgRender(); };
+pgRender();
+
+$("chk_types").onclick=function(){
+  var ok=0, sels=document.querySelectorAll("#typeTable select");
+  sels.forEach(function(s){ s.style.borderColor=""; if(s.value===s.dataset.a){ok++; s.style.borderColor="var(--ok)";} else if(s.value) s.style.borderColor="var(--bad)"; });
+  if (ok===4){ fb("fb_k2_types","ok","Alles richtig. Faustregel: <code>void</code>-Methoden sind Aufträge, Methoden mit Rückgabewert sind hier Anfragen."); markDone("k2_types"); }
+  else fb("fb_k2_types","bad",ok+" von 4 richtig. Schau auf den Rückgabetyp: <code>void</code> heißt, es kommt nichts zurück.");
+};
+if (S.done.k2_types){ document.querySelectorAll("#typeTable select").forEach(function(s){ s.value=s.dataset.a; s.style.borderColor="var(--ok)"; }); fb("fb_k2_types","ok","Alles richtig."); }
+
+/* ---------- Kapitel 3: Vorhersagen ---------- */
+var PRED=[
+  {id:"p1", title:"Ein ganz normaler Vormittag",
+   code:'Queue&lt;String&gt; q = new Queue&lt;String&gt;();\nq.enqueue("Anna");\nq.enqueue("Ben");\nq.enqueue("Cem");\nq.dequeue();\nq.enqueue("Dora");',
+   ask:"Wie sieht die Schlange am Ende aus?", answers:["ben,cem,dora"],
+   hint:"Bei <code>dequeue()</code> verlässt die Person die Schlange, die <b>vorne</b> steht, also wer zuerst kam.",
+   ok:"Richtig: Anna kam zuerst und ist deshalb als Erste dran."},
+  {id:"p2", title:"Einmal zu oft",
+   code:'Queue&lt;String&gt; q = new Queue&lt;String&gt;();\nq.enqueue("Emil");\nq.enqueue("Fatma");\nq.dequeue();\nq.dequeue();\nq.dequeue();\nString x = q.front();',
+   ask:"Welchen Wert hat <code>x</code>?", answers:["null"], placeholder:"Wert von x",
+   hint:"Nach zwei <code>dequeue()</code> ist die Schlange leer. Was sagt die Doku zu <code>dequeue()</code> und <code>front()</code> bei leerer Schlange?",
+   ok:"Richtig: Das dritte <code>dequeue()</code> ändert nichts, und <code>front()</code> liefert bei leerer Schlange <code>null</code>."},
+  {id:"p3", title:"Ein Geist im Wartezimmer?",
+   code:'Queue&lt;String&gt; q = new Queue&lt;String&gt;();\nq.enqueue("Gustav");\nq.enqueue(null);\nq.enqueue("Hira");\nq.dequeue();',
+   ask:"Wie sieht die Schlange am Ende aus?", answers:["hira"],
+   hint:"Was passiert laut Doku bei <code>enqueue(null)</code>?",
+   ok:"Richtig: <code>null</code> wird gar nicht erst angehängt. Nach Gustavs Behandlung wartet nur noch Hira."},
+  {id:"p4", title:"Stack gegen Queue", two:true,
+   code:'<span class="cm">// s ist ein Stack&lt;String&gt;, q eine Queue&lt;String&gt;, beide leer</span>\n<span class="cm">// Ivo, Jana, Kai und Lena kommen in dieser Reihenfolge:</span>\ns.push("Ivo");     q.enqueue("Ivo");\ns.push("Jana");    q.enqueue("Jana");\ns.push("Kai");     q.enqueue("Kai");\ns.push("Lena");    q.enqueue("Lena");\ns.pop();           q.dequeue();',
+   ask:"Was liefern jetzt <code>s.top()</code> und <code>q.front()</code>?", answers:["kai"], answers2:["jana"],
+   placeholder:"s.top() liefert …", placeholder2:"q.front() liefert …",
+   hint:"Der Stack entfernt die zuletzt hinzugefügte Person (Lena), die Queue die zuerst hinzugefügte (Ivo).",
+   ok:"Richtig: Beim Stack ist Kai jetzt oben, bei der Queue steht Jana vorne."},
+  {id:"p5", title:"Karussell (etwas kniffliger)",
+   code:'<span class="cm">// q enthaelt von vorne nach hinten: Anna, Ben, Cem, Dora</span>\nfor (int i = 1; i &lt;= 3; i++)\n{\n    q.enqueue(q.front());\n    q.dequeue();\n}',
+   ask:"Wie sieht die Schlange nach der Schleife aus?", answers:["dora,anna,ben,cem"],
+   hint:"In jedem Durchlauf stellt sich die vorderste Person <b>hinten</b> neu an und wird dann vorne entfernt. Spiele es Runde für Runde auf Papier durch.",
+   ok:"Richtig: Nach drei Runden sind Anna, Ben und Cem einmal nach hinten gewandert. So lässt sich eine Queue „drehen“."}
+];
+function normList(s){
+  s=s.toLowerCase().trim();
+  if (s==="" ) return "";
+  if (/^(leer|empty|\(leer\)|-)$/.test(s)) return "leer";
+  return s.split(/[\s,;|→>\-]+/).filter(Boolean).map(function(x){return x.replace(/["'„“]/g,"");}).join(",");
+}
+function buildPred(){
+  var host=$("predList");
+  PRED.forEach(function(p,n){
+    var d=document.createElement("div"); d.className="card task pred"; d.id="t_"+p.id;
+    d.innerHTML='<span class="tag">Aufgabe 3.'+(n+1)+'</span><span class="done-badge">✓ erledigt</span><h3>'+p.title+'</h3><pre class="code">'+p.code+'</pre><p>'+p.ask+'</p>'+
+      '<div class="ans"><input type="text" id="in_'+p.id+'" placeholder="'+(p.placeholder||"z. B. Anna, Ben")+'" autocomplete="off" autocapitalize="off">'+
+      (p.two?'<input type="text" id="in2_'+p.id+'" placeholder="'+p.placeholder2+'" autocomplete="off" autocapitalize="off">':'')+
+      '<button class="btn primary">Prüfen</button></div><details class="tip"><summary>Tipp</summary>'+p.hint+'</details><div class="fb" id="fb_'+p.id+'"></div>';
+    host.appendChild(d);
+    var tries=0;
+    d.querySelector("button").onclick=function(){
+      var a=normList($("in_"+p.id).value), ok=p.answers.indexOf(a)>=0, ok2=true;
+      if (p.two){ ok2 = p.answers2.indexOf(normList($("in2_"+p.id).value))>=0; }
+      S.inputs[p.id]=[$("in_"+p.id).value, p.two?$("in2_"+p.id).value:""]; save();
+      if (ok && ok2){ fb("fb_"+p.id,"ok",p.ok); markDone(p.id); return; }
+      tries++;
+      var msg;
+      if (a===""){ msg="Bitte erst eine Antwort eintragen."; }
+      else if (p.two && (ok || ok2)){ msg="Eine der beiden Antworten stimmt schon ("+(ok?"Stack":"Queue")+"). Prüfe die andere noch einmal."; }
+      else if (p.id==="p1" && a==="anna,ben,dora"){ msg="Das wäre das Stack-Verhalten: Dort wird die zuletzt Gekommene entfernt. Bei der Queue verlässt die <b>vorderste</b> Person die Schlange."; }
+      else if (p.id==="p2" && (a==="leer"||a==="fatma"||a==="emil")){ msg="Gefragt ist der <b>Rückgabewert</b> von <code>front()</code>. Was liefert <code>front()</code> bei leerer Schlange?"; }
+      else if (p.id==="p3" && a.indexOf("null")>=0){ msg="Schau in die Doku: <code>enqueue(null)</code> lässt die Schlange unverändert."; }
+      else msg="Noch nicht richtig."+(tries>=2?" Öffne den Tipp.":"");
+      fb("fb_"+p.id,"bad",msg||"Noch nicht richtig.");
+    };
+    if (S.inputs[p.id]){ $("in_"+p.id).value=S.inputs[p.id][0]||""; if(p.two) $("in2_"+p.id).value=S.inputs[p.id][1]||""; }
+    if (S.done[p.id]) fb("fb_"+p.id,"ok",p.ok);
+  });
+}
+buildPred();
+
+/* ---------- Kapitel 4: Codeluecken ---------- */
+var PATIENT_CODE =
+'<span class="cm">/**\n * Ein Patient hat einen Namen und ist entweder ein Notfall oder nicht.\n */</span>\n'+
+'<span class="kw">public class</span> Patient\n{\n    <span class="kw">private</span> String name;\n    <span class="kw">private boolean</span> notfall;\n\n'+
+'    <span class="cm">/**\n     * Erzeugt einen Patienten.\n     * @param pName    Name des Patienten\n     * @param pNotfall true, falls es sich um einen Notfall handelt\n     */</span>\n'+
+'    <span class="kw">public</span> Patient(String pName, <span class="kw">boolean</span> pNotfall)\n    {\n        name = pName;\n        notfall = pNotfall;\n    }\n\n'+
+'    <span class="kw">public</span> String getName()\n    {\n        <span class="kw">return</span> name;\n    }\n\n'+
+'    <span class="kw">public boolean</span> istNotfall()\n    {\n        <span class="kw">return</span> notfall;\n    }\n}';
+$("codePatient").innerHTML = PATIENT_CODE;
+
+/* Normalisierung: Leerzeichen egal, this. optional */
+function norm(s){
+  return String(s).replace(/ /g," ").trim().replace(/\bthis\s*\.\s*/g,"").replace(/\s+/g," ").replace(/\s*([^\w\s])\s*/g,"$1");
+}
+var GAPS = {
+  g1:{w:30, sol:"schlange = new Queue<Patient>();", acc:["schlange=new Queue<Patient>();","schlange=new Queue<>();"],
+      tip:"Das Attribut <code>schlange</code> muss ein neues, leeres Queue-Objekt bekommen: <code>attribut = new Klasse&lt;Typ&gt;();</code>"},
+  g2:{w:26, sol:"schlange.enqueue(pPatient);", acc:["schlange.enqueue(pPatient);"],
+      tip:"Der neue Patient stellt sich <b>hinten</b> an. Welche Queue-Methode hängt an? Übergib den Parameter <code>pPatient</code>."},
+  g3:{w:26, sol:"return schlange.isEmpty();", acc:["return schlange.isEmpty();","return schlange.front()==null;"],
+      tip:"Die Methode muss einen <code>boolean</code> zurückgeben. Frag die Schlange, ob sie leer ist: <code>return …;</code>"},
+  g4:{w:20, sol:"schlange.isEmpty()", acc:["schlange.isEmpty()","istLeer()","schlange.isEmpty()==true","schlange.front()==null"],
+      tip:"Hier steht nur eine <b>Bedingung</b> (ohne Semikolon): Wann gibt es niemanden aufzurufen?"},
+  g5:{w:16, sol:"schlange.front()", acc:["schlange.front()"],
+      tip:"Gesucht ist der vorderste Patient, ohne ihn zu entfernen. Nur der Ausdruck, das <code>;</code> steht schon da."},
+  g6:{w:20, sol:"schlange.dequeue();", acc:["schlange.dequeue();"],
+      tip:"Der Patient ist gemerkt, jetzt muss er die Schlange verlassen."},
+  g7:{w:20, sol:"!schlange.isEmpty()", acc:["!schlange.isEmpty()","schlange.isEmpty()==false","!istLeer()","schlange.front()!=null"],
+      tip:"Die Schleife läuft, <b>solange</b> die Schlange <b>nicht</b> leer ist. Verneinung in Java: <code>!</code>"},
+  g8:{w:30, sol:"hilf.enqueue(schlange.front());", acc:["hilf.enqueue(schlange.front());"],
+      tip:"Der vorderste Patient der <code>schlange</code> wird hinten an <code>hilf</code> angehängt. Du brauchst <code>enqueue</code> und <code>front</code> in einer Zeile."},
+  g9:{w:20, sol:"schlange.dequeue();", acc:["schlange.dequeue();"],
+      tip:"Nachdem der Patient in <code>hilf</code> steht, muss er aus <code>schlange</code> entfernt werden."},
+  g10:{w:30, sol:"schlange.enqueue(hilf.front());", acc:["schlange.enqueue(hilf.front());"],
+      tip:"Jetzt umgekehrt: Der vorderste aus <code>hilf</code> wandert zurück in die <code>schlange</code>."},
+  s1:{w:30, sol:"notfaelle = new Queue<Patient>();", acc:["notfaelle=new Queue<Patient>();","notfaelle=new Queue<>();"],
+      tip:"Genau wie bei <code>schlange</code>: Auch die zweite Queue muss im Konstruktor erzeugt werden."},
+  s2:{w:22, sol:"pPatient.istNotfall()", acc:["pPatient.istNotfall()","pPatient.istNotfall()==true"],
+      tip:"Frag den Patienten, ob er ein Notfall ist. Schau in die Klasse <code>Patient</code>."},
+  s3:{w:26, sol:"notfaelle.enqueue(pPatient);", acc:["notfaelle.enqueue(pPatient);"],
+      tip:"Notfälle stellen sich in der <b>eigenen</b> Schlange an."},
+  s4:{w:22, sol:"!notfaelle.isEmpty()", acc:["!notfaelle.isEmpty()","notfaelle.isEmpty()==false","notfaelle.front()!=null"],
+      tip:"Notfälle haben Vorrang, <b>wenn</b> überhaupt einer wartet."},
+  s5:{w:26, sol:"naechster = notfaelle.front();", acc:["naechster=notfaelle.front();"],
+      tip:"Merke dir den vordersten Notfall in der Variablen <code>naechster</code> (sie ist schon deklariert)."},
+  s6:{w:22, sol:"notfaelle.dequeue();", acc:["notfaelle.dequeue();"],
+      tip:"Den gemerkten Notfall aus seiner Schlange entfernen."}
+};
+for (var gk in GAPS){ GAPS[gk].accN = GAPS[gk].acc.map(norm); }
+
+var BLOCKS = [
+  {id:"blkA", title:"Block A · Konstruktor, patientKommt, istLeer", tag:"Aufgabe 4.1",
+   intro:"Die Klasse speichert die Wartenden in einem Attribut <code>schlange</code> vom Typ <code>Queue&lt;Patient&gt;</code>.",
+   code:
+'<span class="cm">/**\n * Die Klasse Wartezimmer verwaltet die wartenden Patienten einer Arztpraxis\n * nach dem Prinzip "Wer zuerst kommt, wird zuerst behandelt" (FIFO).\n */</span>\n'+
+'<span class="kw">public class</span> Wartezimmer\n{\n    <span class="kw">private</span> Queue&lt;Patient&gt; schlange;\n\n'+
+'    <span class="cm">/**\n     * Erzeugt ein leeres Wartezimmer.\n     */</span>\n    <span class="kw">public</span> Wartezimmer()\n    {\n        {{g1}}\n    }\n\n'+
+'    <span class="cm">/**\n     * Ein Patient betritt das Wartezimmer und stellt sich hinten an.\n     * @param pPatient der ankommende Patient\n     */</span>\n    <span class="kw">public void</span> patientKommt(Patient pPatient)\n    {\n        {{g2}}\n    }\n\n'+
+'    <span class="cm">/**\n     * @return true, wenn niemand wartet, sonst false\n     */</span>\n    <span class="kw">public boolean</span> istLeer()\n    {\n        {{g3}}\n    }',
+   gaps:["g1","g2","g3"],
+   tips:["Alle drei Lücken sind ganze Java-Anweisungen und enden deshalb mit einem Semikolon.","Ihr braucht <code>new</code>, <code>enqueue</code> und <code>isEmpty</code>. Vor jeden Queue-Aufruf gehört das Objekt: <code>schlange.…</code>"]},
+  {id:"blkB", title:"Block B · naechsterBitte", tag:"Aufgabe 4.2",
+   intro:"Der nächste Patient wird aufgerufen: Er wird zurückgegeben <b>und</b> verlässt das Wartezimmer. Wartet niemand, wird <code>null</code> zurückgegeben.",
+   code:
+'    <span class="cm">/**\n     * Ruft den naechsten Patienten auf und entfernt ihn aus dem Wartezimmer.\n     * @return der aufgerufene Patient oder null, falls niemand wartet\n     */</span>\n'+
+'    <span class="kw">public</span> Patient naechsterBitte()\n    {\n        <span class="kw">if</span> ({{g4}})\n        {\n            <span class="kw">return null</span>;\n        }\n        Patient naechster = {{g5}};\n        {{g6}}\n        <span class="kw">return</span> naechster;\n    }',
+   gaps:["g4","g5","g6"],
+   tips:["Reihenfolge ist wichtig: Erst <b>merken</b> (front), dann <b>entfernen</b> (dequeue). Umgekehrt würde man den falschen Patienten zurückgeben!","Lücke 4 und 5 sind Ausdrücke ohne Semikolon, Lücke 6 ist eine Anweisung mit Semikolon."]},
+  {id:"blkC", title:"Block C · anzahlWartende", tag:"Aufgabe 4.3",
+   intro:"Die Abi-Queue hat <b>keine</b> Methode <code>size()</code>. Um zu zählen, schichten wir alle Patienten in eine Hilfsschlange um und danach wieder zurück.",
+   code:
+'    <span class="cm">/**\n     * Zaehlt die wartenden Patienten. Danach ist die Reihenfolge unveraendert.\n     * @return Anzahl der wartenden Patienten\n     */</span>\n'+
+'    <span class="kw">public int</span> anzahlWartende()\n    {\n        <span class="kw">int</span> anzahl = 0;\n        Queue&lt;Patient&gt; hilf = <span class="kw">new</span> Queue&lt;Patient&gt;();\n'+
+'        <span class="kw">while</span> ({{g7}})\n        {\n            {{g8}}\n            {{g9}}\n            anzahl++;\n        }\n'+
+'        <span class="kw">while</span> (!hilf.isEmpty())\n        {\n            {{g10}}\n            hilf.dequeue();\n        }\n        <span class="kw">return</span> anzahl;\n    }\n}',
+   gaps:["g7","g8","g9","g10"],
+   tips:["Stell dir zwei Wartezimmer vor: Alle gehen nacheinander von vorne aus <code>schlange</code> nach hinten in <code>hilf</code>, dabei wird gezählt. Danach gehen alle zurück.","Eine Umschicht-Zeile sieht so aus: <code>ziel.enqueue(quelle.front());</code>"]}
+];
+var STAR = {id:"blkS", title:"★ Notfallpatienten", tag:"Sternchenaufgabe",
+  intro:"Notfälle sollen <b>vor</b> allen anderen behandelt werden, untereinander aber wieder nach FIFO. Dazu bekommt das Wartezimmer eine zweite Queue <code>notfaelle</code>. Ergänze die geänderten Methoden.",
+  code:
+'<span class="kw">public class</span> Wartezimmer\n{\n    <span class="kw">private</span> Queue&lt;Patient&gt; schlange;\n    <span class="kw">private</span> Queue&lt;Patient&gt; notfaelle;\n\n'+
+'    <span class="kw">public</span> Wartezimmer()\n    {\n        schlange = <span class="kw">new</span> Queue&lt;Patient&gt;();\n        {{s1}}\n    }\n\n'+
+'    <span class="kw">public void</span> patientKommt(Patient pPatient)\n    {\n        <span class="kw">if</span> ({{s2}})\n        {\n            {{s3}}\n        }\n        <span class="kw">else</span>\n        {\n            schlange.enqueue(pPatient);\n        }\n    }\n\n'+
+'    <span class="kw">public</span> Patient naechsterBitte()\n    {\n        Patient naechster;\n        <span class="kw">if</span> ({{s4}})\n        {\n            {{s5}}\n            {{s6}}\n        }\n        <span class="kw">else</span>\n        {\n            naechster = schlange.front();\n            schlange.dequeue();\n        }\n        <span class="kw">return</span> naechster;\n    }\n}',
+  gaps:["s1","s2","s3","s4","s5","s6"],
+  tips:["Jede Zeile in Notfall-Teil ist ein Spiegelbild einer Zeile für <code>schlange</code>, nur mit <code>notfaelle</code>.","Bonusfrage zum Weiterdenken: Was passiert mit normalen Patienten, wenn ständig neue Notfälle kommen? (Stichwort: Verhungern)"]};
+
+function renderCode(code){
+  return code.replace(/\{\{(\w+)\}\}/g, function(_,g){
+    var n = g.replace(/^g/,"").replace(/^s/,"S");
+    return '<span class="gapnum">'+n+'</span><input class="gap" id="gap_'+g+'" data-g="'+g+'" size="'+GAPS[g].w+'" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Luecke '+n+'">';
+  });
+}
+function diagnose(g, val){
+  var v=norm(val), gp=GAPS[g];
+  if (!v) return "Die Lücke ist noch leer.";
+  if (gp.accN.indexOf(v)>=0) return null;
+  if (gp.accN.indexOf(v+";")>=0) return "Fast! Es fehlt das <b>Semikolon</b> am Ende der Anweisung.";
+  if (v.slice(-1)===";" && gp.accN.indexOf(v.slice(0,-1))>=0) return "Fast! Hier steht nur ein Ausdruck, also <b>kein Semikolon</b>.";
+  var lower=v.toLowerCase();
+  for (var i=0;i<gp.accN.length;i++){ if (gp.accN[i].toLowerCase()===lower || gp.accN[i].toLowerCase()===lower+";") return "Fast! Achte auf die <b>Groß-/Kleinschreibung</b>, Java unterscheidet z. B. <code>Queue</code> und <code>queue</code>."; }
+  if (/\b(push|pop|top)\s*\(/.test(v)) return "Das ist <b>Stack</b>-Vokabular. Die Queue hat <code>enqueue</code>, <code>dequeue</code> und <code>front</code>.";
+  if (/\b(add|remove|poll|offer|peek|size|isempty|get)\s*\(/i.test(v) && !/isEmpty\(/.test(v)) return "Diese Methode hat die Abi-Klasse <code>Queue</code> nicht. Schau in die 📄 Doku.";
+  if (/\b(enqueue|dequeue|front|isEmpty)\b(?!\s*\()/.test(v)) return "Beim Methodenaufruf fehlen die <b>Klammern</b> <code>()</code>.";
+  if (/^(enqueue|dequeue|front|isEmpty)\(/.test(v)) return "Auf welchem Objekt wird die Methode aufgerufen? Es fehlt z. B. <code>schlange.</code> davor.";
+  if (/queue\b/.test(v) && !/Queue/.test(v)) return "Klassennamen schreibt man groß: <code>Queue</code>.";
+  if (g==="g6" && /front/.test(v)) return "Den Patienten haben wir schon gemerkt. Jetzt muss er die Schlange <b>verlassen</b>.";
+  if ((g==="g5") && /dequeue/.test(v)) return "<code>dequeue()</code> ist ein Auftrag und liefert nichts zurück (void). Gesucht ist eine Anfrage.";
+  if (g==="g8" && /^schlange\.enqueue/.test(v)) return "Umgekehrt: Der Patient soll in die <b>Hilfsschlange</b> <code>hilf</code> wandern.";
+  if (g==="g10" && /^hilf\.enqueue/.test(v)) return "Jetzt geht es zurück: in die <code>schlange</code>, aus <code>hilf</code>.";
+  if (/pPatient/.test(gp.sol) && /patient\b/i.test(v) && !/pPatient/.test(v)) return "Der Parameter heißt <code>pPatient</code>.";
+  return "Noch nicht richtig.";
+}
+function buildBlock(b, host, isStar){
+  var d=document.createElement("div"); d.className="card "+(isStar?"star":"task"); d.id="t_"+b.id;
+  var tipsHtml = b.tips.map(function(t,i){ return '<details class="tip"><summary>Tipp '+(i+1)+'</summary>'+t+'</details>'; }).join("");
+  var gapTips = '<details class="tip" id="gt_'+b.id+'"><summary>Tipp 3: Hinweise zu jeder Lücke</summary><ul class="fblist">'+b.gaps.map(function(g){ return '<li><b>Lücke '+g.replace(/^g/,"").replace(/^s/,"S")+':</b> '+GAPS[g].tip+'</li>'; }).join("")+'</ul></details>';
+  d.innerHTML='<span class="tag">'+b.tag+'</span><span class="done-badge">✓ erledigt</span><h3>'+b.title+'</h3><p>'+b.intro+'</p><pre class="code">'+renderCode(b.code)+'</pre>'+
+    '<div class="blockbar"><button class="btn primary" data-act="check">Prüfen</button><button class="btn small" data-act="sol" disabled title="nach 3 Prüfversuchen verfügbar">Lösung zeigen</button><span class="muted" style="font-size:.85rem" data-act="info"></span></div>'+
+    '<div class="fb" id="fb_'+b.id+'"></div>'+tipsHtml+gapTips;
+  host.appendChild(d);
+  d.querySelectorAll("details.tip").forEach(function(det,i){
+    det.addEventListener("toggle",function(){ if(det.open){ S.hints[b.id]=Math.max(S.hints[b.id]||0,i+1); save(); renderResult(); } });
+  });
+  b.gaps.forEach(function(g){
+    var inp=$("gap_"+g);
+    if (S.gapVals[g]!==undefined) inp.value=S.gapVals[g];
+    inp.addEventListener("input",function(){ S.gapVals[g]=inp.value; save(); inp.classList.remove("ok","bad"); fitGap(inp); });
+    inp.addEventListener("keydown",function(e){ if(e.key==="Enter") d.querySelector('[data-act="check"]').click(); });
+    fitGap(inp);
+  });
+  var solBtn=d.querySelector('[data-act="sol"]'), info=d.querySelector('[data-act="info"]');
+  function updSol(){ var t=S.tries[b.id]||0; solBtn.disabled = S.done[b.id] || t<3; info.textContent = S.done[b.id]?"": (t<3? "Prüfversuche: "+t+" (Lösung ab 3)":""); }
+  d.querySelector('[data-act="check"]').onclick=function(){
+    var errs=[], okc=0;
+    b.gaps.forEach(function(g){
+      var inp=$("gap_"+g), msg=diagnose(g, inp.value);
+      inp.classList.remove("ok","bad");
+      if (msg===null){ inp.classList.add("ok"); okc++; S.solved[g]=true; }
+      else { inp.classList.add("bad"); errs.push('<li><b>Lücke '+g.replace(/^g/,"").replace(/^s/,"S")+':</b> '+msg+'</li>'); }
+    });
+    if (!errs.length){
+      fb("fb_"+b.id,"ok","Alle Lücken richtig!"+(S.shown[b.id]?" (mit Lösungshilfe)":""));
+      markDone(b.id); updateRun();
+    } else {
+      S.tries[b.id]=(S.tries[b.id]||0)+1;
+      fb("fb_"+b.id,"bad",okc+" von "+b.gaps.length+" Lücken richtig.<ul class=\"fblist\">"+errs.join("")+"</ul>");
+    }
+    save(); updSol();
+  };
+  solBtn.onclick=function(){
+    if (!confirm("Lösung für diesen Block anzeigen? Das wird auf der Ergebniskarte vermerkt.")) return;
+    S.shown[b.id]=true;
+    b.gaps.forEach(function(g){ var inp=$("gap_"+g); if(!S.solved[g]){ inp.value=GAPS[g].sol; S.gapVals[g]=inp.value; fitGap(inp);} });
+    save(); renderResult();
+    fb("fb_"+b.id,"hint","Die Lösung ist eingetragen. Lies sie genau und klicke dann auf <b>Prüfen</b>.");
+  };
+  updSol();
+  if (S.done[b.id]){ b.gaps.forEach(function(g){ $("gap_"+g).classList.add("ok"); }); fb("fb_"+b.id,"ok","Alle Lücken richtig!"); }
+}
+function fitGap(inp){ var g=GAPS[inp.dataset.g]; inp.size=Math.max(g.w, inp.value.length+1); }
+BLOCKS.forEach(function(b){ buildBlock(b, $("gapBlocks"), false); });
+buildBlock(STAR, $("starBlock"), true);
+(function(){ var c=$("t_blkS"); var p=document.createElement("p"); p.className="muted"; p.style.fontSize=".9rem"; p.innerHTML="Diese Aufgabe ist freiwillig und zählt nicht zum Fortschritt, wird aber auf der Ergebniskarte gezeigt."; c.insertBefore(p, c.querySelector("pre")); })();
+
+/* Testlauf */
+var MAIN_CODE =
+'<span class="kw">public static void</span> main(String[] args)\n{\n    Wartezimmer w = <span class="kw">new</span> Wartezimmer();\n'+
+'    w.patientKommt(<span class="kw">new</span> Patient("Anna", <span class="kw">false</span>));\n    w.patientKommt(<span class="kw">new</span> Patient("Ben", <span class="kw">false</span>));\n    w.patientKommt(<span class="kw">new</span> Patient("Cem", <span class="kw">false</span>));\n'+
+'    System.out.println(w.naechsterBitte().getName());\n    w.patientKommt(<span class="kw">new</span> Patient("Dora", <span class="kw">false</span>));\n'+
+'    System.out.println(w.naechsterBitte().getName());\n    System.out.println(w.anzahlWartende());\n    System.out.println(w.istLeer());\n}';
+$("codeMain").innerHTML=MAIN_CODE;
+function updateRun(){
+  var ok = S.done.blkA && S.done.blkB;
+  $("runBtn").disabled=!ok;
+  $("runHint").textContent = ok ? (S.done.blkC? "" : "Hinweis: anzahlWartende() erst nach Block C") : "erst Block A und B lösen";
+}
+$("runBtn").onclick=function(){
+  var q=[], out=[];
+  q.push("Anna"); q.push("Ben"); q.push("Cem");
+  out.push(q.shift()); q.push("Dora"); out.push(q.shift());
+  out.push(S.done.blkC ? String(q.length) : "[anzahlWartende() noch nicht fertig]");
+  out.push(String(q.length===0));
+  var o=$("runOut"); o.className="out show"; o.textContent="";
+  var i=0; (function step(){ if(i<out.length){ o.textContent+= out[i++]+"\n"; setTimeout(step,350);} else { o.textContent+="\n// Programm beendet. Stimmt das mit deiner Vorhersage ueberein?"; } })();
+};
+updateRun();
+
+/* ---------- Kapitel 5: Quiz ---------- */
+var QUIZ=[
+  {id:"q1", q:"Wofür steht FIFO?", o:[["First In, First Out",1],["Fast Input, Fast Output",0],["First In, Final Out",0],["Last In, First Out",0]], e:"Das zuerst eingefügte Objekt wird zuerst entnommen."},
+  {id:"q2", q:"Welche Methode liefert das vorderste Objekt, <b>ohne</b> die Schlange zu verändern?", o:[["front()",1],["dequeue()",0],["enqueue()",0],["top()",0]], e:"<code>front()</code> ist eine Anfrage. <code>top()</code> gehört zum Stack."},
+  {id:"q3", q:"<code>q</code> ist leer. Was liefert <code>q.front()</code>?", o:[["null",1],["Eine Fehlermeldung (Exception)",0],["0",0],["Das zuletzt entfernte Objekt",0]], e:"Laut Abi-Dokumentation liefert <code>front()</code> bei leerer Schlange <code>null</code>."},
+  {id:"q4", q:"Welche Situation passt <b>nicht</b> zur Queue?", o:[["Die Rückgängig-Funktion (Strg+Z) in einem Textprogramm",1],["Druckaufträge an einen Schuldrucker",0],["Kundinnen an der Supermarktkasse",0],["Anrufe in einer Telefon-Hotline",0]], e:"Rückgängig macht die <i>letzte</i> Aktion zuerst rückgängig: LIFO, also Stack."},
+  {id:"q5", q:"<code>q.enqueue(1); q.enqueue(2); q.dequeue(); q.enqueue(3);</code><br>Was liefert danach <code>q.front()</code>?", o:[["2",1],["1",0],["3",0],["null",0]], e:"Die 1 wurde entfernt, die 2 steht jetzt vorne, die 3 hinten."},
+  {id:"q6", q:"Was passiert bei <code>q.enqueue(null)</code>?", o:[["Die Schlange bleibt unverändert.",1],["null wird hinten angehängt.",0],["Die Schlange wird geleert.",0],["Es gibt eine NullPointerException.",0]], e:"So steht es in der Dokumentation: Falls <code>pContent</code> gleich <code>null</code> ist, bleibt die Schlange unverändert."},
+  {id:"q7", q:"Wie findet man heraus, wie viele Objekte in einer Abi-Queue stehen, ohne sie dauerhaft zu verändern?", o:[["Alle Objekte zählend in eine Hilfsschlange umschichten und danach zurück",1],["Mit der Methode q.size()",0],["Mit q.front().length",0],["Gar nicht, das ist unmöglich",0]], e:"Die Klasse hat keine <code>size()</code>-Methode. Siehe <code>anzahlWartende()</code>."},
+  {id:"q8", q:"Ausblick Zeigerbild: Damit <code>enqueue</code> unabhängig von der Länge in <b>konstanter</b> Zeit hinten anhängen kann, merkt sich die Queue intern …", o:[["… zusätzlich zum ersten Knoten (head) auch den letzten Knoten (tail).",1],["… die Anzahl der Elemente.",0],["… alle Elemente in umgekehrter Reihenfolge.",0],["… nur den ersten Knoten (head) und läuft dann bis zum Ende.",0]], e:"Mit <code>tail</code> muss man nicht erst durch die ganze Kette laufen. Genau das bauen wir in der nächsten Stunde gemeinsam."}
+];
+function buildQuiz(){
+  var host=$("quizList");
+  QUIZ.forEach(function(qq,n){
+    var d=document.createElement("div"); d.className="card task"; d.id="t_"+qq.id;
+    d.innerHTML='<span class="tag">Frage '+(n+1)+' von '+QUIZ.length+'</span><div style="margin:.2em 0 .4em;font-weight:600">'+qq.q+'</div><div class="mc"></div><div class="fb" id="fb_'+qq.id+'"></div>';
+    host.appendChild(d);
+    var mc=d.querySelector(".mc");
+    // feste, aber gemischte Reihenfolge
+    var order=qq.o.map(function(_,i){return i;}); var seed=n*7+3;
+    for (var j=order.length-1;j>0;j--){ seed=(seed*9301+49297)%233280; var r=Math.floor(seed/233280*(j+1)); var tmp=order[j]; order[j]=order[r]; order[r]=tmp; }
+    order.forEach(function(i){
+      var o=qq.o[i], b=document.createElement("button"); b.innerHTML=o[0]; b.dataset.r=o[1];
+      b.onclick=function(){
+        if (S.mcFirst[qq.id]!==undefined) return;
+        S.mcFirst[qq.id]=!!o[1]; save();
+        mc.querySelectorAll("button").forEach(function(x){ x.disabled=true; if(x.dataset.r==="1") x.classList.add("right"); });
+        if(!o[1]) b.classList.add("wrong");
+        fb("fb_"+qq.id, o[1]?"ok":"bad", (o[1]?"<b>Richtig.</b> ":"<b>Leider falsch.</b> ")+qq.e);
+        markDone(qq.id); renderResult();
+      };
+      mc.appendChild(b);
+    });
+    if (S.mcFirst[qq.id]!==undefined){
+      mc.querySelectorAll("button").forEach(function(x){ x.disabled=true; if(x.dataset.r==="1") x.classList.add("right"); });
+      fb("fb_"+qq.id, S.mcFirst[qq.id]?"ok":"bad", (S.mcFirst[qq.id]?"<b>Richtig.</b> ":"<b>Leider falsch.</b> ")+qq.e);
+    }
+  });
+}
+buildQuiz();
+
+$("refText").value=S.ref||"";
+function refUpd(){
+  var n=$("refText").value.trim().length; S.ref=$("refText").value; save();
+  $("refCount").textContent=n+" Zeichen (mind. 80)";
+  if (n>=80) markDone("k5_ref"); else if (S.done.k5_ref){ delete S.done.k5_ref; save(); $("t_k5_ref").classList.remove("is-done"); refreshProgress(); }
+  renderResult();
+}
+$("refText").addEventListener("input", refUpd);
+
+/* ---------- Ergebniskarte ---------- */
+function renderResult(){
+  var host=$("resultCard"); if(!host) return;
+  var rows="", tot=0, dn=0;
+  ["k1","k2","k3","k4","k5"].forEach(function(c){
+    var t=TASKS[c].length, d=TASKS[c].filter(function(x){return S.done[x];}).length; tot+=t; dn+=d;
+    rows+='<tr><td>'+CHAPNAMES[c]+'</td><td>'+d+' / '+t+(d===t?' ✓':'')+'</td></tr>';
+  });
+  var quizOk=QUIZ.filter(function(q){return S.mcFirst[q.id]===true;}).length, quizAns=QUIZ.filter(function(q){return S.mcFirst[q.id]!==undefined;}).length;
+  var gapsAll=[]; BLOCKS.forEach(function(b){ gapsAll=gapsAll.concat(b.gaps); });
+  var gapsOk=gapsAll.filter(function(g){return S.solved[g];}).length;
+  var hintsUsed=0; for (var k in S.hints) if (k!=="blkS") hintsUsed+=S.hints[k];
+  var solShown=BLOCKS.filter(function(b){return S.shown[b.id];}).map(function(b){return b.id.replace("blk","");});
+  var star = S.done.blkS ? "gelöst"+(S.shown.blkS?" (mit Lösungshilfe)":"") : (STAR.gaps.some(function(g){return S.solved[g];}) ? "begonnen" : "–");
+  var p=Math.round(100*dn/tot);
+  var now=new Date();
+  var stamp=now.toLocaleDateString("de-DE")+", "+now.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
+  var mins=S.start?Math.floor((Date.now()-S.start)/60000):0;
+  host.innerHTML=
+    '<div class="rhead"><div><div class="muted" style="font-size:.85rem">Ergebniskarte · Selbstlernstunde Queue · Informatik LK Q1</div><div style="font-size:1.25rem;font-weight:700">'+esc(S.name||"(kein Name)")+'</div><div class="muted" style="font-size:.85rem">'+stamp+' · Arbeitszeit '+mins+' Min.</div></div><div style="text-align:right"><div class="big">'+p+' %</div><div class="muted" style="font-size:.85rem">'+dn+' von '+tot+' Aufgaben</div></div></div>'+
+    '<div class="tblwrap"><table><tr><th>Kapitel</th><th>erledigt</th></tr>'+rows+
+    '<tr><td>Java-Lücken (A–C)</td><td>'+gapsOk+' / '+gapsAll.length+'</td></tr>'+
+    '<tr><td>Quiz, beim ersten Versuch richtig</td><td>'+quizOk+' / '+QUIZ.length+(quizAns<QUIZ.length?' ('+quizAns+' beantwortet)':'')+'</td></tr>'+
+    '<tr><td>Tipps zu Java geöffnet</td><td>'+hintsUsed+'</td></tr>'+
+    '<tr><td>Lösung angezeigt (Block)</td><td>'+(solShown.length?solShown.join(", "):"keine")+'</td></tr>'+
+    '<tr><td>★ Notfallpatienten</td><td>'+star+'</td></tr></table></div>'+
+    '<div style="margin-top:10px"><div class="muted" style="font-size:.85rem">Reflexion: Stack vs. Queue</div><div style="white-space:pre-wrap;border-left:3px solid var(--accent);padding-left:10px;margin-top:4px">'+(S.ref?esc(S.ref):'<i class="muted">noch nicht ausgefüllt</i>')+'</div></div>';
+}
+
+$("resetAll").onclick=function(){
+  if (!confirm("Wirklich ALLES zurücksetzen? Dein Fortschritt geht verloren.")) return;
+  try{ localStorage.removeItem(KEY);}catch(e){}
+  location.reload();
+};
+
+/* Start */
+tick(); refreshProgress();
+go(S.name ? (S.chapter||"k1") : "k0");
+})();
+</script>
+</body>
+</html>
